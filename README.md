@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/claubi-logo.svg" alt="Claubi" width="120" />
+  <img src="assets/claubi-logo.svg" alt="Claubi" width="100" />
 </p>
 
 <h1 align="center">Claubi</h1>
@@ -9,296 +9,242 @@
 </p>
 
 <p align="center">
-  A security-hardened, local-first AI coding agent built in Rust.<br/>
-  Inspired by Claude Code's architecture. Reimagined with security, aesthetics, and efficiency as first-class citizens.
+  <em>A Rust-based AI coding agent that runs any model on your hardware.<br/>
+  No vendor lock-in. No content filtering. No compromises on security.</em>
 </p>
 
 <p align="center">
-  <a href="#architecture">Architecture</a> ·
-  <a href="#philosophy">Philosophy</a> ·
-  <a href="#getting-started">Getting Started</a> ·
-  <a href="#security-model">Security Model</a> ·
-  <a href="#roadmap">Roadmap</a>
+  <a href="#what-is-claubi">What is Claubi</a>&ensp;|&ensp;
+  <a href="#why">Why</a>&ensp;|&ensp;
+  <a href="#architecture">Architecture</a>&ensp;|&ensp;
+  <a href="#models">Models</a>&ensp;|&ensp;
+  <a href="#security">Security</a>&ensp;|&ensp;
+  <a href="#roadmap">Roadmap</a>&ensp;|&ensp;
+  <a href="#getting-started">Get Started</a>
 </p>
 
----
-
-## Why Claubi Exists
-
-AI coding agents are powerful. They're also reckless.
-
-They generate code that works but isn't secure. They produce output that functions but looks like it was assembled by committee. They run commands on your machine with the confidence of someone who doesn't live with the consequences.
-
-**Claubi takes a different position.** Every tool invocation passes through a permission system. Every piece of generated code runs through security analysis before it touches your project. Every output is held to an aesthetic standard — because "it works" was never the bar.
-
-Built in Rust for performance and memory safety. Runs local models on Apple Silicon. Uses Claude API when the task demands it. Gives you a full engineering team that treats security and design as non-negotiable.
+<br/>
 
 ---
 
-## Philosophy
+<br/>
 
-### 🔒 Secure by Default
+<h2 id="what-is-claubi">What is Claubi</h2>
 
-Security isn't a layer you bolt on after the fact. In Claubi, every generated artifact — code, config, infrastructure — passes through static analysis, dependency auditing, and secrets detection before it's written to disk. The agent doesn't just build things. It builds things that are safe to ship.
+Claubi is a terminal-based AI coding agent built in Rust. It turns your local machine into an engineering team.
 
-- OWASP Top 10 awareness baked into code generation prompts
-- Automatic secrets scanning (API keys, tokens, credentials) in all output
-- Dependency vulnerability checking before any package is added
-- File operation sandboxing with explicit allowlists
-- Full audit trail of every tool invocation and model decision
+You describe what you want to build. Claubi breaks it into tasks, routes each task to the best available model, generates the code, reviews it for security vulnerabilities and quality, and delivers production-ready output — all running locally on your hardware.
 
-### 🎨 Beautiful by Design
+It connects to any model through [Ollama](https://ollama.com) — Gemma 4, Llama, Qwen, Mistral, DeepSeek, or any of the hundreds of models in the Ollama library. If you need frontier-level reasoning for complex architecture decisions, it can optionally call the Claude API. But it doesn't require it. Claubi works fully offline.
 
-AI-generated code has an aesthetic problem. Default templates, generic layouts, boilerplate everything. Claubi enforces design standards through opinionated output templates and review passes that catch the lazy patterns.
+<br/>
 
-- Generated frontends follow real design systems, not Bootstrap defaults
-- Documentation comes formatted and readable, not walls of text
-- CLI output is clean, colored, and informative — not log spam
-- Every project scaffold includes design tokens and style foundations
+<h2 id="why">Why</h2>
 
-### ⚡ Efficient by Architecture
+AI coding tools today have three problems.
 
-Rust isn't just fast — it's predictable. No garbage collection pauses. No runtime surprises. On an M4 Pro, Claubi coordinates multiple local models with minimal overhead, routing tasks to the right model for the job.
+**They're not secure.** They generate code that works but ships with hardcoded secrets, vulnerable dependencies, and insecure defaults. The security review happens after the code is written — if it happens at all.
 
-- Local model orchestration via Ollama (Qwen 2.5 Coder, Llama 3.1, Mistral)
-- Claude API integration for complex architectural decisions
-- Parallel task execution across model instances
-- Streaming output — you see results as they're generated, not after
+**They're not yours.** They run on someone else's servers, under someone else's content policies. Ask a cloud AI to write a penetration testing script and it lectures you about responsible use. Ask it to generate code that interacts with security tools and it hedges. These are tools that don't trust the people using them.
 
----
+**They're not beautiful.** The output works but looks like it was assembled by committee. Default templates, boilerplate scaffolds, no design intention.
+
+Claubi takes a different position:
+
+- **Security is structural.** Every generated artifact is scanned for secrets, vulnerabilities, and insecure defaults *before* it touches your project. Permissions are deny-first. Every tool invocation is audit-logged.
+- **You are the authority.** Local models have no content filtering. No refusals. The security layer protects your codebase — it doesn't gatekeep what you're allowed to ask.
+- **Aesthetics matter.** Generated code follows real design systems. Documentation is formatted and readable. The terminal interface itself is clean, informative, and intentional.
+
+<br/>
 
 <h2 id="architecture">Architecture</h2>
 
-Claubi's architecture draws from Claude Code's coordinator pattern but restructures it around three principles: every action is auditable, every output is reviewed, and every external call is sandboxed.
-
 ```
-┌──────────────────────────────────────────────────────────┐
-│                      CLAUBI CLI                          │
-│                  (User Interface Layer)                   │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  PLANNER    │  │  EXECUTOR    │  │   REVIEWER     │  │
-│  │             │  │              │  │                │  │
-│  │ Breaks down │  │ Routes tasks │  │ Security scan  │  │
-│  │ ideas into  │──│ to the right │──│ Quality check  │  │
-│  │ scoped tasks│  │ model/tool   │  │ Style review   │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-│         │                │                   │           │
-├─────────┼────────────────┼───────────────────┼───────────┤
-│         ▼                ▼                   ▼           │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │              SECURITY MIDDLEWARE                    │  │
-│  │                                                    │  │
-│  │  Permission Engine · Sandbox · Audit Log ·         │  │
-│  │  Secrets Scanner · Dependency Checker              │  │
-│  └────────────────────────────────────────────────────┘  │
-│         │                │                   │           │
-├─────────┼────────────────┼───────────────────┼───────────┤
-│         ▼                ▼                   ▼           │
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐   │
-│  │  LOCAL   │    │  CLAUDE API  │    │    TOOLS     │   │
-│  │  MODELS  │    │  (Opus/      │    │              │   │
-│  │          │    │   Sonnet)    │    │  File I/O    │   │
-│  │  Ollama  │    │              │    │  Shell exec  │   │
-│  │  Qwen    │    │  Architect   │    │  Git ops     │   │
-│  │  Llama   │    │  decisions   │    │  Web fetch   │   │
-│  │  Mistral │    │              │    │  DB queries  │   │
-│  └──────────┘    └──────────────┘    └──────────────┘   │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+YOU
+ |
+ v
++-----------------------------------------------------+
+|                    CLAUBI TUI                        |
+|            Beautiful terminal interface               |
++-----------------------------------------------------+
+|                                                     |
+|  PLANNER --> EXECUTOR --> REVIEWER                  |
+|  Breaks      Routes       Security scan             |
+|  ideas       tasks to     Quality check             |
+|  into work   best model   Design review             |
+|                                                     |
++-----------------------------------------------------+
+|              SECURITY MIDDLEWARE                      |
+|  Deny-first permissions | Sandbox | Audit log        |
+|  Secrets scanner | Dependency checker | SAST          |
++-----------------------------------------------------+
+|                                                     |
+|  LOCAL MODELS        CLAUDE API        TOOLS        |
+|  (Ollama)            (optional)                     |
+|                                        Files        |
+|  Gemma 4             Opus 4.6          Shell        |
+|  Llama 3.1           Sonnet 4.6        Git          |
+|  Qwen 2.5                              Web          |
+|  Mistral                                            |
+|  DeepSeek                                           |
+|  Dolphin                                            |
+|  ...anything                                        |
+|                                                     |
++-----------------------------------------------------+
+|              LOCAL MCP SERVER                        |
+|  Long-term memory | Project history | Preferences    |
++-----------------------------------------------------+
 ```
 
-### Core Components
+### How it works
 
-**Planner** — Takes a high-level idea or task description, breaks it into discrete, well-scoped work items. Uses Claude API for complex decomposition, local models for straightforward breakdowns. Every plan is presented for user approval before execution begins.
+1. **You give an instruction** — "Build a secure REST API with JWT auth and rate limiting"
+2. **Planner** breaks it into discrete tasks, presents the plan for your approval
+3. **Executor** routes each task to the best model — code generation to Qwen, reasoning to Gemma 4, simple tasks to the fastest available model
+4. **Security middleware** checks every tool invocation against the permission engine. Shell commands get prefix analysis. File writes go through the sandbox. Everything is audit-logged.
+5. **Reviewer** scans all generated code — secrets detection, dependency auditing, SAST patterns, quality checks, design system compliance
+6. **You approve** the final output. Nothing ships without your sign-off.
 
-**Executor** — The orchestrator. Routes each task to the appropriate model based on complexity and type. Code generation goes to Qwen 2.5 Coder. Reasoning and analysis to Llama. Simple transformations to the fastest available local model. Claude API is reserved for architectural decisions and complex multi-file changes.
+<br/>
 
-**Reviewer** — Nothing ships without review. The reviewer runs security analysis (SAST patterns, secrets detection, dependency checks), quality checks (linting, formatting, type safety), and aesthetic review (design system compliance, documentation standards). Failed reviews get sent back to the executor with specific feedback.
+<h2 id="models">Models</h2>
 
-**Security Middleware** — Sits between every component and the outside world. File operations go through an allowlist. Shell commands require explicit approval for anything outside a safe set. Network calls are logged and auditable. Every model decision is written to an append-only audit log.
+Claubi runs any model available through Ollama. No lock-in. Pull what you need:
 
----
+```bash
+# Reasoning and agentic tasks
+ollama pull gemma4:26b
 
-<h2 id="security-model">Security Model</h2>
+# Fast code generation
+ollama pull qwen2.5-coder:7b
 
-### Threat Model
+# Unrestricted generation (no refusals)
+ollama pull dolphin-mistral
 
-Claubi operates with the assumption that **AI-generated code is untrusted by default.** The security model is designed to catch:
+# General reasoning
+ollama pull llama3.1:8b
 
-| Threat | Mitigation |
-|---|---|
-| Hardcoded secrets in generated code | Pre-commit secrets scanner (regex + entropy analysis) |
-| Vulnerable dependencies | Automated `cargo audit` / `npm audit` / `pip-audit` before any install |
-| Command injection via shell tools | Allowlisted command set + argument sanitization |
-| Path traversal in file operations | Sandboxed working directory with explicit allowlist |
-| Prompt injection from untrusted input | Input sanitization layer between user content and model prompts |
-| Insecure default configurations | Security-hardened templates for common frameworks |
+# Lightweight background tasks
+ollama pull gemma4:e4b
+```
+
+The model router picks the right model for each task automatically. You can override per-session or per-task.
+
+Claude API integration is optional — useful for complex multi-file reasoning and architectural decisions, but not required for any core functionality.
+
+<br/>
+
+<h2 id="security">Security Model</h2>
+
+### Philosophy
+
+AI-generated code is **untrusted by default**. The security layer exists to protect *your codebase*, not to restrict *your intent*.
 
 ### Permission Tiers
 
+| Tier | Behavior | Examples |
+|------|----------|---------|
+| **Tier 0** | Always allowed, no prompt | Read files, run linters, generate code to memory |
+| **Tier 1** | Auto-approved, logged | Write files to project dir, run tests, git status |
+| **Tier 2** | Requires your confirmation | Install dependencies, run shell commands, git push |
+| **Tier 3** | Always blocked | Modify files outside sandbox, access system creds, run as root |
+
+### Deny-First Evaluation
+
 ```
-TIER 0 — ALWAYS ALLOWED (no prompt)
-  Read files in project directory
-  Run linters and formatters
-  Generate code to memory (not yet written)
-
-TIER 1 — AUTO-APPROVED WITH LOG
-  Write files to project directory
-  Run tests
-  Git status / diff / log
-
-TIER 2 — REQUIRES CONFIRMATION
-  Install dependencies
-  Run arbitrary shell commands
-  Git commit / push
-  Network requests
-
-TIER 3 — ALWAYS BLOCKED
-  Modify files outside project directory
-  Access system credentials
-  Execute as root
-  Disable security checks
+Incoming tool request
+  --> Check DENY rules (absolute block, nothing overrides)
+  --> Check ALLOW rules (auto-approve)
+  --> Check ASK rules (prompt user)
+  --> If undecided, prompt user
 ```
 
----
+This is the same pattern used by AWS IAM policies, Okta authorization rules, and CrowdStrike prevention policies. A deny is absolute.
 
-## Getting Started
+### Automated Scanning
 
-### Prerequisites
+Every piece of generated code passes through:
+- **Secrets scanner** — regex + entropy analysis for API keys, tokens, credentials
+- **Dependency auditor** — checks for known vulnerabilities before any package install
+- **SAST patterns** — detects common vulnerability classes (injection, XSS, path traversal, insecure deserialization)
+- **Audit log** — append-only JSONL log of every tool invocation, permission decision, and outcome
 
-- **macOS** on Apple Silicon (M1/M2/M3/M4) — optimized for Metal acceleration
-- **Rust** toolchain (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- **Ollama** for local models (`brew install ollama`)
-- **Anthropic API key** for Claude integration (optional but recommended)
-
-### Install
-
-```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/claubi.git
-cd claubi
-
-# Build in release mode (optimized for M4 Pro)
-cargo build --release
-
-# Pull recommended local models
-ollama pull qwen2.5-coder:7b
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-
-# Set up your environment
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-
-# Run Claubi
-./target/release/claubi
-```
-
-### First Run
-
-```bash
-# Start with something simple
-claubi "Create a secure REST API in Rust with authentication and rate limiting"
-
-# Claubi will:
-# 1. Break this into tasks (plan phase)
-# 2. Ask you to approve the plan
-# 3. Generate code with security checks at every step
-# 4. Run the reviewer before writing any files
-# 5. Present the final output for your approval
-```
-
----
+<br/>
 
 <h2 id="roadmap">Roadmap</h2>
 
-### Phase 1 — Foundation `[Current]`
-- [ ] CLI scaffolding and argument parsing
-- [ ] Ollama integration (model management, inference)
-- [ ] Claude API client
-- [ ] Basic tool system (file read/write, shell exec)
-- [ ] Permission engine (tier-based)
-- [ ] Audit logging
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **Phase 1** | CLI + Ollama + Shell tool + Permissions + Audit | **In progress** |
+| **Phase 2** | Multi-model routing + Full tool suite + Claude API | Planned |
+| **Phase 3** | Planner and Reviewer agents + Security scanning | Planned |
+| **Phase 4** | Beautiful TUI with Ratatui | Planned |
+| **Phase 5** | Local MCP server (long-term memory) | Planned |
+| **Phase 6** | Multi-agent engineering team | Planned |
 
-### Phase 2 — Intelligence
-- [ ] Planner agent (task decomposition)
-- [ ] Executor agent (model routing)
-- [ ] Reviewer agent (security + quality)
-- [ ] Multi-model orchestration
-- [ ] Streaming output
+See [PLAN.md](PLAN.md) for the detailed breakdown of every phase.
 
-### Phase 3 — Security Hardening
-- [ ] Secrets scanner
-- [ ] Dependency vulnerability checker
-- [ ] SAST pattern matching for common vulnerabilities
-- [ ] Sandboxed execution environment
-- [ ] Prompt injection detection
+<br/>
 
-### Phase 4 — Aesthetics Engine
-- [ ] Design system templates (React, HTML, CLI)
-- [ ] Output formatting standards
-- [ ] Documentation generation with style
-- [ ] Project scaffold templates (opinionated, beautiful defaults)
+<h2 id="getting-started">Getting Started</h2>
 
-### Phase 5 — Memory & Learning
-- [ ] Project context persistence between sessions
-- [ ] Decision history and pattern learning
-- [ ] User preference adaptation
-- [ ] Cross-project knowledge transfer
+### Prerequisites
 
----
+- macOS on Apple Silicon (M1-M4) or Linux
+- [Rust](https://rustup.rs) toolchain
+- [Ollama](https://ollama.com) for local models
+- Anthropic API key (optional, for Claude integration)
+
+### Build
+
+```bash
+git clone https://github.com/tejalgoyal2/claubi.git
+cd claubi
+
+# Build (release mode, optimized)
+cargo build --release
+
+# Pull at least one model
+ollama pull gemma4:26b
+
+# Configure (optional, for Claude API)
+cp .env.example .env
+# Edit .env with your ANTHROPIC_API_KEY
+
+# Run
+./target/release/claubi
+```
+
+<br/>
 
 ## Project Structure
 
 ```
 claubi/
 ├── src/
-│   ├── main.rs              # Entry point
-│   ├── cli/                  # CLI interface and argument parsing
-│   ├── agents/
-│   │   ├── planner.rs        # Task decomposition
-│   │   ├── executor.rs       # Model routing and orchestration
-│   │   └── reviewer.rs       # Security + quality + aesthetic review
-│   ├── models/
-│   │   ├── ollama.rs         # Local model integration
-│   │   └── claude.rs         # Anthropic API client
-│   ├── tools/
-│   │   ├── filesystem.rs     # Sandboxed file operations
-│   │   ├── shell.rs          # Command execution with permissions
-│   │   ├── git.rs            # Git operations
-│   │   └── web.rs            # Network requests
-│   ├── security/
-│   │   ├── permissions.rs    # Tier-based permission engine
-│   │   ├── scanner.rs        # Secrets and vulnerability scanning
-│   │   ├── sandbox.rs        # Execution sandboxing
-│   │   └── audit.rs          # Append-only audit log
-│   ├── design/
-│   │   ├── templates.rs      # Opinionated project templates
-│   │   └── review.rs         # Aesthetic quality checks
-│   └── config/
-│       └── mod.rs            # Configuration management
-├── templates/                 # Design-system-aware scaffolds
-├── security-rules/            # SAST patterns and scanning rules
-├── tests/
-├── CLAUDE.md                  # Instructions for Claude Code
-├── Cargo.toml
-├── .env.example
-└── README.md
+│   ├── main.rs                # Entry point
+│   ├── cli/                   # Terminal interface
+│   ├── agents/                # Planner, Executor, Reviewer
+│   ├── models/                # Ollama client, Claude API client
+│   ├── tools/                 # File, Shell, Git, Web tools
+│   ├── security/              # Permissions, Audit, Scanner, Sandbox
+│   ├── design/                # Output templates, aesthetic review
+│   └── config/                # Environment and settings
+├── templates/                  # Project scaffolding templates
+├── security-rules/             # SAST patterns and scanning rules
+├── CLAUDE.md                   # Context file for Claude Code
+├── PLAN.md                     # Detailed project roadmap
+├── ARCHITECTURE_NOTES.md       # Patterns studied from reference architecture
+└── Cargo.toml
 ```
 
----
-
-## The Name
-
-**Claubi** — inspired by Claude, built to be your buddy. Not a fork. Not a clone. A reimagining of what an AI coding agent should be when security, design, and efficiency aren't afterthoughts.
-
----
+<br/>
 
 ## Legal
 
-This project is an independent work. It does not contain, redistribute, or derive from any proprietary source code. Architectural patterns are studied from publicly available documentation, blog posts, and clean-room analysis. All code in this repository is original.
+This project is an independent, clean-room implementation. It does not contain, redistribute, or derive from any proprietary source code. Architectural patterns are studied from publicly available documentation, blog posts, and clean-room analysis. All code in this repository is original work, licensed under MIT.
+
+<br/>
 
 ---
 
