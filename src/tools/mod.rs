@@ -7,6 +7,8 @@
 // Temporary: suppressed until the REPL wires up actual calls.
 #![allow(dead_code)]
 
+pub mod shell;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

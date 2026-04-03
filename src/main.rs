@@ -4,6 +4,7 @@
 //! launch the CLI REPL. For now, just proves the module tree compiles.
 
 mod models;
+mod security;
 mod tools;
 
 fn main() {
