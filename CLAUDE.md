@@ -116,6 +116,7 @@ Location: configurable, default ./logs/audit.jsonl
 - All public functions must have doc comments
 - Integration tests in `tests/`, unit tests inline with `#[cfg(test)]`
 - Run `cargo clippy -- -D warnings` before committing — zero warnings policy
+- For work-in-progress modules where structs exist for future use, add `#[allow(dead_code)]` at the module level. Remove it once the module is fully integrated. Do not add `allow(dead_code)` to individual structs — apply it at the module level to avoid repeating this pattern.
 
 ### File Organization
 - One module per file, one concern per module

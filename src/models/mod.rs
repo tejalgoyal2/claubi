@@ -1,13 +1,14 @@
 //! Model clients for local (Ollama) and remote (Claude API) inference.
 
+#![allow(dead_code)]
+
 pub mod ollama;
 
-#[allow(unused_imports)] // Re-exports for external consumers; used once lib boundary exists.
+#[allow(unused_imports)]
 pub use ollama::{ChatChunk, ChatMessage, ModelInfo, OllamaClient};
 
 /// Errors from the Ollama client.
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)] // Some variants only used by not-yet-called methods.
 pub enum OllamaError {
     #[error("cannot connect to ollama: {0}")]
     Connection(reqwest::Error),
