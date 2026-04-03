@@ -222,8 +222,7 @@ fn input_matches_pattern(input: &str, pattern: &str) -> bool {
     }
 
     // Prefix match: input starts with pattern followed by whitespace or end
-    if input_trimmed.starts_with(pattern_trimmed) {
-        let rest = &input_trimmed[pattern_trimmed.len()..];
+    if let Some(rest) = input_trimmed.strip_prefix(pattern_trimmed) {
         return rest.is_empty() || rest.starts_with(' ');
     }
 
