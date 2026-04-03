@@ -4,7 +4,7 @@
 //! permissions, audit logging, and hooks live in the executor middleware,
 //! not in the tools themselves.
 
-// Temporary: suppressed until the REPL wires up actual calls.
+// Several trait methods and types are only used once the executor calls tools.
 #![allow(dead_code)]
 
 pub mod shell;

@@ -32,6 +32,7 @@ impl ShellTool {
     }
 
     /// Create a shell tool with a custom timeout.
+    #[allow(dead_code)] // Used when config specifies CLAUBI_MAX_SHELL_TIMEOUT_SECS.
     pub fn with_timeout(timeout_secs: u64) -> Self {
         Self { timeout_secs }
     }

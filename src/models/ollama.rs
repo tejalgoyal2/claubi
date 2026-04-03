@@ -3,9 +3,6 @@
 //! Handles connection, model listing, and streaming chat completions
 //! against a local Ollama instance. All network I/O goes through reqwest.
 
-// Temporary: suppressed until the REPL wires up actual calls.
-#![allow(dead_code)]
-
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -76,6 +73,7 @@ impl OllamaClient {
     }
 
     /// Check that Ollama is reachable by hitting the root endpoint.
+    #[allow(dead_code)] // Used once startup health checks are added.
     #[instrument(skip(self))]
     pub async fn health_check(&self) -> Result<(), OllamaError> {
         let url = format!("{}/", self.base_url);
@@ -205,6 +203,7 @@ impl OllamaClient {
     }
 
     /// Non-streaming chat completion. Convenience wrapper for simple calls.
+    #[allow(dead_code)] // Available for non-streaming use cases.
     #[instrument(skip(self, messages))]
     pub async fn chat(
         &self,

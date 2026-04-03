@@ -4,6 +4,9 @@
 //! whether it was allowed, how long it took, and whether it succeeded.
 //! The log file is append-only; entries are never modified or deleted.
 
+// Most of the API is exercised once the executor is called from the REPL.
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};

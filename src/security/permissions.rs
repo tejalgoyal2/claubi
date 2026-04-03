@@ -4,6 +4,9 @@
 //! require user confirmation. Deny rules are absolute — nothing overrides
 //! them, not hooks, not allow rules, not session overrides.
 
+// Most of the API is exercised once the executor is called from the REPL.
+#![allow(dead_code)]
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
