@@ -4,10 +4,6 @@
 //! the permission engine, times execution, and logs every invocation to the
 //! audit trail. Tools themselves never check permissions or write audit entries.
 
-// The executor is constructed in main.rs but not called until tool-call
-// parsing is added to the REPL.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::time::Instant;

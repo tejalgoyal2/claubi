@@ -1,19 +1,25 @@
 //! Interactive REPL for Claubi.
 //!
 //! Provides the main user-facing loop: reads input, routes to Ollama
-//! for inference or handles built-in commands, and prints responses.
+//! for inference or handles built-in commands, prints responses, and
+//! offers to execute any detected shell commands through the tool executor.
 
+pub mod parser;
+
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 
 use colored::Colorize;
 use tracing::error;
 
+use crate::agents::ToolExecutor;
 use crate::models::ollama::{ChatMessage, OllamaClient};
 
 /// Configuration for the REPL session.
 pub struct ReplConfig {
     pub model: String,
     pub ollama: OllamaClient,
+    pub executor: ToolExecutor,
 }
 
 /// Run the interactive REPL loop.
@@ -60,7 +66,20 @@ pub async fn run(config: ReplConfig) {
                 handle_model_switch(&config.ollama, cmd, &mut active_model).await;
             }
             input => {
-                handle_chat(&config.ollama, &active_model, &mut history, input).await;
+                let response = handle_chat(
+                    &config.ollama,
+                    &active_model,
+                    &mut history,
+                    input,
+                )
+                .await;
+
+                if let Some(text) = response {
+                    let commands = parser::extract_commands(&text);
+                    if !commands.is_empty() {
+                        handle_detected_commands(&config.executor, &commands).await;
+                    }
+                }
             }
         }
     }
@@ -69,18 +88,18 @@ pub async fn run(config: ReplConfig) {
 // ── Command handlers ────────────────────────────────────────────────────
 
 /// Send user input to the Ollama model and print the response.
+/// Returns the full response text if successful (for command parsing).
 async fn handle_chat(
     ollama: &OllamaClient,
     model: &str,
     history: &mut Vec<ChatMessage>,
     user_input: &str,
-) {
+) -> Option<String> {
     history.push(ChatMessage {
         role: "user".into(),
         content: user_input.to_owned(),
     });
 
-    // Use streaming for a responsive feel.
     match ollama.chat_stream(model, history).await {
         Ok(mut rx) => {
             let mut full_response = String::new();
@@ -98,21 +117,122 @@ async fn handle_chat(
                     }
                 }
             }
-            println!(); // newline after streamed response
+            println!();
 
-            if !full_response.is_empty() {
+            if full_response.is_empty() {
+                None
+            } else {
                 history.push(ChatMessage {
                     role: "assistant".into(),
-                    content: full_response,
+                    content: full_response.clone(),
                 });
+                Some(full_response)
             }
         }
         Err(e) => {
-            // Pop the user message since we never got a response.
             history.pop();
             print_error(&format!("ollama error: {e}"));
+            None
         }
     }
+}
+
+/// Present detected commands to the user and offer execution.
+async fn handle_detected_commands(executor: &ToolExecutor, commands: &[String]) {
+    println!();
+    println!(
+        "{}",
+        format!(
+            "[Claubi detected {} command{}]",
+            commands.len(),
+            if commands.len() == 1 { "" } else { "s" }
+        )
+        .cyan()
+        .bold()
+    );
+
+    for (i, cmd) in commands.iter().enumerate() {
+        println!("  {}: {}", format!("{}", i + 1).cyan(), cmd.white());
+    }
+
+    println!();
+    print!("{}", "Run these commands? [y]es all / [n]o / [s]elect individually: ".yellow());
+    io::stdout().flush().unwrap_or(());
+
+    let choice = read_line_lowercase();
+
+    match choice.as_str() {
+        "y" | "yes" => {
+            run_commands(executor, commands).await;
+        }
+        "s" | "select" => {
+            run_commands_selectively(executor, commands).await;
+        }
+        _ => {
+            print_system("skipped.");
+        }
+    }
+}
+
+/// Execute all commands sequentially through the tool executor.
+async fn run_commands(executor: &ToolExecutor, commands: &[String]) {
+    for (i, cmd) in commands.iter().enumerate() {
+        print_command_header(i + 1, cmd);
+        execute_single_command(executor, cmd).await;
+    }
+}
+
+/// Prompt for each command individually, then execute approved ones.
+async fn run_commands_selectively(executor: &ToolExecutor, commands: &[String]) {
+    for (i, cmd) in commands.iter().enumerate() {
+        print!(
+            "  {} {} {} ",
+            format!("[{}/{}]", i + 1, commands.len()).dimmed(),
+            cmd.white(),
+            "[y/n]?".yellow()
+        );
+        io::stdout().flush().unwrap_or(());
+
+        let choice = read_line_lowercase();
+        if matches!(choice.as_str(), "y" | "yes") {
+            execute_single_command(executor, cmd).await;
+        } else {
+            print_system("  skipped.");
+        }
+    }
+}
+
+/// Run one command through the executor and print the result.
+async fn execute_single_command(executor: &ToolExecutor, cmd: &str) {
+    let mut params = HashMap::new();
+    params.insert(
+        "command".into(),
+        serde_json::Value::String(cmd.to_owned()),
+    );
+
+    match executor.execute("shell", params).await {
+        Ok(output) => {
+            if output.success {
+                if !output.content.is_empty() {
+                    println!("{}", output.content);
+                }
+            } else {
+                print_error(&output.content);
+            }
+        }
+        Err(e) => {
+            print_error(&format!("{e}"));
+        }
+    }
+}
+
+/// Print a header before running a command.
+fn print_command_header(index: usize, cmd: &str) {
+    println!(
+        "\n{} {}",
+        format!("[{index}]").cyan().bold(),
+        cmd.white().bold()
+    );
 }
 
 /// Switch the active model for this session.
@@ -219,6 +339,10 @@ fn print_help() {
         "{}",
         "Anything else is sent to the model as a chat message.".dimmed()
     );
+    println!(
+        "{}",
+        "Commands in the model's response will be detected and offered for execution.".dimmed()
+    );
     println!();
 }
 
@@ -231,4 +355,11 @@ fn print_system(msg: &str) {
 fn print_error(msg: &str) {
     error!("{}", msg);
     println!("{}", msg.red());
+}
+
+/// Read a line from stdin and return it lowercased and trimmed.
+fn read_line_lowercase() -> String {
+    let mut buf = String::new();
+    io::stdin().lock().read_line(&mut buf).unwrap_or(0);
+    buf.trim().to_lowercase()
 }

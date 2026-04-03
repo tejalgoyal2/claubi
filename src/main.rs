@@ -53,8 +53,13 @@ async fn main() {
     // Initialize permission engine and tool executor.
     let permissions = PermissionEngine::with_defaults();
     let tools: Vec<Box<dyn tools::Tool>> = vec![Box::new(ShellTool::new())];
-    let _executor = agents::ToolExecutor::new(tools, permissions, audit);
+    let executor = agents::ToolExecutor::new(tools, permissions, audit);
 
     // Start the REPL.
-    cli::run(cli::ReplConfig { model, ollama }).await;
+    cli::run(cli::ReplConfig {
+        model,
+        ollama,
+        executor,
+    })
+    .await;
 }
