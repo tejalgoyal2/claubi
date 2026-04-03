@@ -4,6 +4,9 @@
 //! permissions, audit logging, and hooks live in the executor middleware,
 //! not in the tools themselves.
 
+// Temporary: suppressed until the REPL wires up actual calls.
+#![allow(dead_code)]
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

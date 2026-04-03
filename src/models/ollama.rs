@@ -3,6 +3,9 @@
 //! Handles connection, model listing, and streaming chat completions
 //! against a local Ollama instance. All network I/O goes through reqwest.
 
+// Temporary: suppressed until the REPL wires up actual calls.
+#![allow(dead_code)]
+
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,8 @@
 //! Model clients for local (Ollama) and remote (Claude API) inference.
 
+// Temporary: nothing calls into these modules until the REPL is wired up.
+#![allow(dead_code)]
+
 pub mod ollama;
 
 pub use ollama::{ChatChunk, ChatMessage, ModelInfo, OllamaClient};
