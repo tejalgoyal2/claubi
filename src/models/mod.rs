@@ -5,6 +5,7 @@
 
 pub mod ollama;
 
+#[allow(unused_imports)]
 pub use ollama::{ChatChunk, ChatMessage, ModelInfo, OllamaClient};
 
 /// Errors from the Ollama client.
