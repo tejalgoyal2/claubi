@@ -62,6 +62,16 @@ struct TagsResponse {
     models: Vec<ModelInfo>,
 }
 
+/// System prompt prepended to every Ollama chat call so the model
+/// identifies as Claubi rather than its underlying weights.
+const SYSTEM_PROMPT: &str = "\
+You are Claubi, a local AI coding assistant running entirely on the user's machine. \
+You are not a cloud service. You are not Qwen, not GPT, not Claude. You are Claubi. \
+You help the user write secure, efficient, and well-designed code. \
+Be direct, concise, and practical. \
+When you suggest running a command, format it in a code block. \
+When you write code, always consider security implications.";
+
 // ── Implementation ──────────────────────────────────────────────────────
 
 impl OllamaClient {
@@ -129,9 +139,10 @@ impl OllamaClient {
         messages: &[ChatMessage],
     ) -> Result<mpsc::Receiver<Result<ChatChunk, OllamaError>>, OllamaError> {
         let url = format!("{}/api/chat", self.base_url);
+        let full_messages = with_system_prompt(messages);
         let body = ChatRequest {
             model,
-            messages,
+            messages: &full_messages,
             stream: true,
         };
 
@@ -211,9 +222,10 @@ impl OllamaClient {
         messages: &[ChatMessage],
     ) -> Result<ChatChunk, OllamaError> {
         let url = format!("{}/api/chat", self.base_url);
+        let full_messages = with_system_prompt(messages);
         let body = ChatRequest {
             model,
-            messages,
+            messages: &full_messages,
             stream: false,
         };
 
@@ -234,6 +246,22 @@ impl OllamaClient {
 
         resp.json().await.map_err(OllamaError::Deserialize)
     }
+}
+
+/// Prepend the Claubi system prompt if no system message is already present.
+fn with_system_prompt(messages: &[ChatMessage]) -> Vec<ChatMessage> {
+    let has_system = messages.first().is_some_and(|m| m.role == "system");
+    if has_system {
+        return messages.to_vec();
+    }
+
+    let mut full = Vec::with_capacity(messages.len() + 1);
+    full.push(ChatMessage {
+        role: "system".into(),
+        content: SYSTEM_PROMPT.into(),
+    });
+    full.extend_from_slice(messages);
+    full
 }
 
 #[cfg(test)]

@@ -20,7 +20,8 @@ pub struct ReplConfig {
 ///
 /// Blocks until the user types "exit" or "quit", or stdin closes.
 pub async fn run(config: ReplConfig) {
-    print_banner(&config.model);
+    let mut active_model = config.model;
+    print_banner(&active_model);
 
     let mut history: Vec<ChatMessage> = Vec::new();
     let stdin = io::stdin();
@@ -50,12 +51,16 @@ pub async fn run(config: ReplConfig) {
             }
             "/help" => print_help(),
             "/models" => handle_models(&config.ollama).await,
+            "/model" => handle_models(&config.ollama).await,
             "/clear" => {
                 history.clear();
                 print_system("conversation cleared.");
             }
+            cmd if cmd.starts_with("/model ") => {
+                handle_model_switch(&config.ollama, cmd, &mut active_model).await;
+            }
             input => {
-                handle_chat(&config.ollama, &config.model, &mut history, input).await;
+                handle_chat(&config.ollama, &active_model, &mut history, input).await;
             }
         }
     }
@@ -106,6 +111,35 @@ async fn handle_chat(
             // Pop the user message since we never got a response.
             history.pop();
             print_error(&format!("ollama error: {e}"));
+        }
+    }
+}
+
+/// Switch the active model for this session.
+async fn handle_model_switch(
+    ollama: &OllamaClient,
+    cmd: &str,
+    active_model: &mut String,
+) {
+    let requested = cmd.strip_prefix("/model ").unwrap_or("").trim();
+    if requested.is_empty() {
+        handle_models(ollama).await;
+        return;
+    }
+
+    match ollama.list_models().await {
+        Ok(models) => {
+            if models.iter().any(|m| m.name == requested) {
+                *active_model = requested.to_owned();
+                println!("{}", format!("switched to {requested}").green());
+            } else {
+                print_error(&format!(
+                    "model '{requested}' not found. Run /models to see available models."
+                ));
+            }
+        }
+        Err(e) => {
+            print_error(&format!("failed to list models: {e}"));
         }
     }
 }
@@ -175,10 +209,11 @@ fn print_prompt() {
 fn print_help() {
     println!();
     println!("{}", "Commands:".white().bold());
-    println!("  {}  — list available Ollama models", "/models".yellow());
-    println!("  {}   — clear conversation history", "/clear".yellow());
-    println!("  {}    — show this help message", "/help".yellow());
-    println!("  {}    — quit Claubi", "exit".yellow());
+    println!("  {}          — list available Ollama models", "/models".yellow());
+    println!("  {} {} — switch to a different model", "/model".yellow(), "<name>".dimmed());
+    println!("  {}           — clear conversation history", "/clear".yellow());
+    println!("  {}            — show this help message", "/help".yellow());
+    println!("  {}            — quit Claubi", "exit".yellow());
     println!();
     println!(
         "{}",
