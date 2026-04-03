@@ -75,7 +75,7 @@ fn collect_block<'a>(lines: &mut impl Iterator<Item = &'a str>) -> Vec<String> {
 
 /// Check if a language tag indicates a shell block.
 fn is_shell_tag(tag: &str) -> bool {
-    SHELL_TAGS.iter().any(|&t| tag == t)
+    SHELL_TAGS.contains(&tag)
 }
 
 /// Add each line from a shell-tagged block as a separate command.
@@ -103,7 +103,7 @@ fn add_prefix_matched_commands(block: &[String], commands: &mut Vec<String>) {
             .trim();
 
         let first_word = cleaned.split_whitespace().next().unwrap_or("");
-        if COMMAND_PREFIXES.iter().any(|&p| first_word == p) && !commands.contains(&cleaned.to_owned()) {
+        if COMMAND_PREFIXES.contains(&first_word) && !commands.contains(&cleaned.to_owned()) {
             commands.push(cleaned.to_owned());
         }
     }
