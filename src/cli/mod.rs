@@ -56,7 +56,12 @@ pub async fn run(config: ReplConfig) {
     let mut chat_history: Vec<ChatMessage> = Vec::new();
 
     loop {
-        match rl.readline(&format!("{} ", "claubi>".green().bold())) {
+        // Print the colored prompt manually — rustyline's prompt string
+        // with raw ANSI codes can miscalculate width and mishandle signals.
+        print!("{} ", "claubi>".green().bold());
+        io::stdout().flush().unwrap_or(());
+
+        match rl.readline("") {
             Ok(line) => {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
@@ -138,14 +143,23 @@ async fn handle_chat(
 
     match ollama.chat_stream(model, history).await {
         Ok(mut rx) => {
+            // Stream tokens to a buffer silently — we render once at the end
+            // so termimad can format the complete markdown.
             let mut full_response = String::new();
+            // Show a simple spinner/indicator while waiting.
+            print!("{}", "thinking...".dimmed());
+            io::stdout().flush().unwrap_or(());
+            let mut first_token = true;
+
             while let Some(chunk_result) = rx.recv().await {
                 match chunk_result {
                     Ok(chunk) => {
-                        let token = &chunk.message.content;
-                        print!("{}", token.white());
-                        io::stdout().flush().unwrap_or(());
-                        full_response.push_str(token);
+                        if first_token {
+                            // Clear the "thinking..." indicator.
+                            print!("\r{}\r", " ".repeat(20));
+                            first_token = false;
+                        }
+                        full_response.push_str(&chunk.message.content);
                     }
                     Err(e) => {
                         print_error(&format!("\nstream error: {e}"));
@@ -153,12 +167,15 @@ async fn handle_chat(
                     }
                 }
             }
-            println!();
+
+            if first_token {
+                // Never got a token — clear the indicator.
+                print!("\r{}\r", " ".repeat(20));
+            }
 
             if full_response.is_empty() {
                 None
             } else {
-                // Re-render the complete response with markdown formatting.
                 render_markdown(&full_response);
 
                 history.push(ChatMessage {
@@ -176,23 +193,11 @@ async fn handle_chat(
     }
 }
 
-/// Render markdown text to the terminal using termimad.
+/// Render model response text to the terminal using termimad for
+/// markdown formatting. Falls back to plain printing on failure.
 fn render_markdown(text: &str) {
-    // Only re-render if the response contains markdown syntax worth formatting.
-    let has_markdown = text.contains("```")
-        || text.contains("**")
-        || text.contains("## ")
-        || text.contains("- ")
-        || text.contains("1. ")
-        || text.contains('`');
-
-    if !has_markdown {
-        return;
-    }
-
-    // Print a separator then the formatted version.
-    println!("{}", "─".repeat(40).dimmed());
-    termimad::print_text(text);
+    let skin = termimad::MadSkin::default();
+    skin.print_text(text);
 }
 
 /// Present detected commands to the user and offer execution.
