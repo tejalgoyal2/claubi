@@ -1,15 +1,19 @@
 //! Interactive REPL for Claubi.
 //!
-//! Provides the main user-facing loop: reads input, routes to Ollama
-//! for inference or handles built-in commands, prints responses, and
-//! offers to execute any detected shell commands through the tool executor.
+//! Provides the main user-facing loop: reads input via rustyline (with
+//! line editing and persistent history), routes to Ollama for inference,
+//! renders markdown responses via termimad, and offers to execute any
+//! detected shell commands through the tool executor.
 
 pub mod parser;
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 
 use colored::Colorize;
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 use tracing::error;
 
 use crate::agents::ToolExecutor;
@@ -22,66 +26,98 @@ pub struct ReplConfig {
     pub executor: ToolExecutor,
 }
 
+/// Path to the persistent command history file.
+fn history_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".claubi_history")
+}
+
 /// Run the interactive REPL loop.
 ///
-/// Blocks until the user types "exit" or "quit", or stdin closes.
+/// Blocks until the user types "exit" or "quit", presses Ctrl+D, or
+/// stdin closes.
 pub async fn run(config: ReplConfig) {
     let mut active_model = config.model;
     print_banner(&active_model);
 
-    let mut history: Vec<ChatMessage> = Vec::new();
-    let stdin = io::stdin();
+    let mut rl = match DefaultEditor::new() {
+        Ok(editor) => editor,
+        Err(e) => {
+            print_error(&format!("failed to initialize line editor: {e}"));
+            return;
+        }
+    };
+
+    // Load history from disk (ignore if file doesn't exist yet).
+    let hist_path = history_path();
+    let _ = rl.load_history(&hist_path);
+
+    let mut chat_history: Vec<ChatMessage> = Vec::new();
 
     loop {
-        print_prompt();
+        match rl.readline(&format!("{} ", "claubi>".green().bold())) {
+            Ok(line) => {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
 
-        let mut line = String::new();
-        match stdin.lock().read_line(&mut line) {
-            Ok(0) => break, // EOF
-            Ok(_) => {}
-            Err(e) => {
-                print_error(&format!("failed to read input: {e}"));
-                continue;
-            }
-        }
+                rl.add_history_entry(trimmed).unwrap_or(false);
 
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
+                match trimmed {
+                    "exit" | "quit" => {
+                        print_system("goodbye.");
+                        break;
+                    }
+                    "/help" => print_help(),
+                    "/models" => handle_models(&config.ollama).await,
+                    "/model" => handle_models(&config.ollama).await,
+                    "/clear" => {
+                        chat_history.clear();
+                        print_system("conversation cleared.");
+                    }
+                    cmd if cmd.starts_with("/model ") => {
+                        handle_model_switch(&config.ollama, cmd, &mut active_model).await;
+                    }
+                    input => {
+                        let response = handle_chat(
+                            &config.ollama,
+                            &active_model,
+                            &mut chat_history,
+                            input,
+                        )
+                        .await;
 
-        match trimmed {
-            "exit" | "quit" => {
-                print_system("goodbye.");
-                break;
-            }
-            "/help" => print_help(),
-            "/models" => handle_models(&config.ollama).await,
-            "/model" => handle_models(&config.ollama).await,
-            "/clear" => {
-                history.clear();
-                print_system("conversation cleared.");
-            }
-            cmd if cmd.starts_with("/model ") => {
-                handle_model_switch(&config.ollama, cmd, &mut active_model).await;
-            }
-            input => {
-                let response = handle_chat(
-                    &config.ollama,
-                    &active_model,
-                    &mut history,
-                    input,
-                )
-                .await;
-
-                if let Some(text) = response {
-                    let commands = parser::extract_commands(&text);
-                    if !commands.is_empty() {
-                        handle_detected_commands(&config.executor, &commands).await;
+                        if let Some(text) = response {
+                            let commands = parser::extract_commands(&text);
+                            if !commands.is_empty() {
+                                handle_detected_commands(&config.executor, &commands).await;
+                            }
+                        }
                     }
                 }
             }
+            Err(ReadlineError::Interrupted) => {
+                // Ctrl+C — cancel current input, continue loop.
+                println!();
+                continue;
+            }
+            Err(ReadlineError::Eof) => {
+                // Ctrl+D — exit gracefully.
+                print_system("goodbye.");
+                break;
+            }
+            Err(e) => {
+                print_error(&format!("input error: {e}"));
+                break;
+            }
         }
+    }
+
+    // Persist history on exit.
+    if let Err(e) = rl.save_history(&hist_path) {
+        print_error(&format!("failed to save history: {e}"));
     }
 }
 
@@ -122,6 +158,9 @@ async fn handle_chat(
             if full_response.is_empty() {
                 None
             } else {
+                // Re-render the complete response with markdown formatting.
+                render_markdown(&full_response);
+
                 history.push(ChatMessage {
                     role: "assistant".into(),
                     content: full_response.clone(),
@@ -135,6 +174,25 @@ async fn handle_chat(
             None
         }
     }
+}
+
+/// Render markdown text to the terminal using termimad.
+fn render_markdown(text: &str) {
+    // Only re-render if the response contains markdown syntax worth formatting.
+    let has_markdown = text.contains("```")
+        || text.contains("**")
+        || text.contains("## ")
+        || text.contains("- ")
+        || text.contains("1. ")
+        || text.contains('`');
+
+    if !has_markdown {
+        return;
+    }
+
+    // Print a separator then the formatted version.
+    println!("{}", "─".repeat(40).dimmed());
+    termimad::print_text(text);
 }
 
 /// Present detected commands to the user and offer execution.
@@ -319,12 +377,6 @@ fn print_banner(model: &str) {
     println!();
 }
 
-/// Print the input prompt.
-fn print_prompt() {
-    print!("{} ", "claubi>".green().bold());
-    io::stdout().flush().unwrap_or(());
-}
-
 /// Print the /help output.
 fn print_help() {
     println!();
@@ -358,6 +410,7 @@ fn print_error(msg: &str) {
 }
 
 /// Read a line from stdin and return it lowercased and trimmed.
+/// Used for y/n prompts where rustyline would be overkill.
 fn read_line_lowercase() -> String {
     let mut buf = String::new();
     io::stdin().lock().read_line(&mut buf).unwrap_or(0);

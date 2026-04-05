@@ -41,6 +41,8 @@ tokio-stream = "0.1"
 # Terminal
 crossterm = "0.28"
 colored = "2"
+rustyline = "15"
+termimad = "0.31"
 
 # Security - regex for secrets scanning
 regex = "1"
